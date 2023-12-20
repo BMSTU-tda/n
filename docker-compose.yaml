@@ -1,0 +1,83 @@
+services:
+  app:
+    image: iu5devops/app
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: iu5devops-app
+    networks:
+      - iu5devops
+    ports:
+      - 8080:5000
+    environment:
+      - FLASK_DEBUG=1
+      - APP_SERVICE_NAME=iu5devops-app
+      - TRACE_ENDPOINT=http://iu5devops-jaeger:4317
+      - OTEL_PYTHON_LOG_CORRELATION=true
+      - OTEL_PYTHON_LOG_LEVEL=info
+    volumes:
+      - app-log:/app/log
+
+
+  jaeger:
+    image: jaegertracing/all-in-one
+    container_name: iu5devops-jaeger
+    networks:
+      - iu5devops
+    ports:
+      - 16686:16686
+
+  prometheus:
+    image: prom/prometheus
+    container_name: iu5devops-prometheus
+    networks:
+      - iu5devops
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana
+    container_name: iu5devops-grafana
+    networks:
+      - iu5devops
+    ports:
+      - 4000:3000
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/grafana.yml:/etc/grafana/provisioning/datasources/datasources.yaml
+
+  loki:
+    image: grafana/loki:latest
+    container_name: iu5devops-loki
+    networks:
+      - iu5devops
+    ports:
+      - 3100:3100
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image:  grafana/promtail:latest
+    container_name: iu5devops-promtail
+    depends_on:
+      - loki
+    networks:
+      - iu5devops
+    volumes:
+      - app-log:/log
+      - ./promtail/promtail.yaml:/etc/promtail/docker-config.yaml
+    command: -config.file=/etc/promtail/docker-config.yaml
+
+volumes:
+  grafana-storage:
+    name: iu5devops-grafana-storage
+  prometheus-data:
+    name: iu5devops-prometheus-data
+  app-log:
+    name: iu5devops-app-log
+
+networks:
+  iu5devops:
+    name: iu5devops
